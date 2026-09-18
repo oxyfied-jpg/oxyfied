@@ -113,8 +113,7 @@ app.get(['/api/health', '/api'], async (_req: Request, res: Response) => {
   try {
     const userCount = await prisma.user.count();
     res.json({
-      success: true,
-      status: 'healthy',
+      status: 'ok',
       service: 'oxyfied-api',
       environment: process.env.NODE_ENV || (process.env.VERCEL ? 'production' : 'development'),
       database: 'connected',
@@ -123,12 +122,11 @@ app.get(['/api/health', '/api'], async (_req: Request, res: Response) => {
     });
   } catch (dbErr: any) {
     res.status(500).json({
-      success: false,
-      status: 'degraded',
+      status: 'error',
       service: 'oxyfied-api',
       environment: process.env.NODE_ENV || (process.env.VERCEL ? 'production' : 'development'),
-      database: 'error',
-      message: 'Database connection issue occurred.',
+      database: 'disconnected',
+      message: 'Database connection failed. Please ensure DATABASE_URL environment variable is set in Vercel project settings.',
       timestamp: new Date().toISOString()
     });
   }
@@ -1047,11 +1045,19 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
     return;
   }
 
+  console.log('[AUTH_LOGIN_REQUEST_RECEIVED]', {
+    endpoint: '/api/auth/login',
+    hasEmail: !!email,
+    hasPassword: !!password
+  });
+
   try {
     await ensureDefaultUsers();
+    console.log('[AUTH_DATABASE_CONNECTION_SUCCESS]');
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user) {
+      console.warn('[AUTH_USER_NOT_FOUND]');
       // Record failed login event
       try {
         await prisma.loginActivity.create({
@@ -1084,8 +1090,11 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
+    console.log('[AUTH_USER_FOUND]', { role: user.role });
+
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) {
+      console.warn('[AUTH_PASSWORD_MISMATCH]', { role: user.role });
       // Record failed login event
       try {
         await prisma.loginActivity.create({
@@ -1121,6 +1130,8 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
       res.status(400).json({ error: 'Invalid email address or password.' });
       return;
     }
+
+    console.log('[AUTH_PASSWORD_VERIFICATION_SUCCESS]', { role: user.role });
 
     if (user.status === 'inactive') {
       // Record blocked login event
@@ -1228,7 +1239,8 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role, sessionToken }, JWT_SECRET, { expiresIn: '7d' });
     const formatted = await formatUserResponse(user.id);
 
-    console.log('[AUTH_LOGIN_SUCCESS]', {
+    console.log('[AUTH_TOKEN_GENERATED]', { role: user.role, expiresIn: '7d' });
+    console.log('[AUTH_LOGIN_RESPONSE_SENT]', {
       endpoint: '/api/auth/login',
       status: 200,
       role: user.role,
@@ -1242,11 +1254,11 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
       token,
       user: formatted
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[AUTH_LOGIN_ERROR]', {
       endpoint: '/api/auth/login',
       status: 500,
-      message: 'Server error during login processing'
+      message: error?.message || 'Server error during login processing'
     });
     res.status(500).json({ error: 'Login failed due to a server error.' });
   }
@@ -1255,6 +1267,12 @@ app.post('/api/auth/login', async (req: Request, res: Response): Promise<void> =
 // Forgot password
 app.post('/api/auth/forgot-password', async (req: Request, res: Response): Promise<void> => {
   const { email } = req.body;
+  if (!email) {
+    res.status(400).json({ error: 'Email address is required.' });
+    return;
+  }
+
+  // Simulation: Return standard success response to avoid email enumeration
   res.json({
     success: true,
     message: 'Password reset link sent successfully.'
@@ -1306,8 +1324,8 @@ app.post('/api/auth/logout', authenticateToken, async (req: AuthRequest, res: Re
   }
 });
 
-// Get user profile
-app.get('/api/users/profile', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
+// Get user profile (supports both /api/users/profile and /api/auth/me)
+app.get(['/api/users/profile', '/api/auth/me'], authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const formatted = await formatUserResponse(req.user!.id);
     if (!formatted) {
