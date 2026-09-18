@@ -1,0 +1,475 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String              @id @default(cuid())
+  name            String
+  email           String              @unique
+  phone           String?
+  avatar          String?
+  passwordHash    String
+  role            String              @default("student") // student, admin, mentor
+  status          String              @default("active") // active, inactive
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  enrollments     Enrollment[]
+  progress        LessonProgress[]
+  mentor          Mentor?
+  sessions        UserSession[]
+  submissions     ProjectSubmission[]
+  notifications   Notification[]
+  loginActivities LoginActivity[]
+  googleOAuth     GoogleOAuthAccount?
+  certificates        Certificate[]
+  certificateRequests CertificateRequest[]
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  icon        String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  courses     Course[]
+
+  @@index([slug])
+  @@index([sortOrder])
+}
+
+model Mentor {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  designation  String   @default("Lead Mentor")
+  bio          String
+  profileImage String
+  email        String?
+  expertise    String[] @default([])
+  status       String   @default("active") // active, inactive
+  isActive     Boolean  @default(true) // legacy compatibility
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  courses             Course[]
+  certificateRequests CertificateRequest[]
+}
+
+model Course {
+  id               String              @id @default(cuid())
+  title            String
+  slug             String              @unique
+  shortDescription String
+  description      String
+  thumbnail        String
+  categoryId       String
+  category         Category            @relation(fields: [categoryId], references: [id])
+  mentorId         String
+  mentor           Mentor              @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  price            Float
+  discountPrice    Float?
+  duration         String
+  level            String
+  language         String              @default("English")
+  previewVideoUrl  String?             @db.Text
+  status           String              @default("draft") // draft, available, coming-soon, archived
+  isFeatured       Boolean             @default(false)
+  isActive         Boolean             @default(true)
+  skills           String[]
+  requirements     String[]
+  whoIsItFor       String[]
+  modules          Module[]
+  lessons          Lesson[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  enrollments      Enrollment[]
+  progress         LessonProgress[]
+  submissions      ProjectSubmission[]
+  certificateTemplateId String?
+  certificateTemplate   CertificateTemplate? @relation(fields: [certificateTemplateId], references: [id], onDelete: SetNull)
+  certificates          Certificate[]
+  certificateRequests   CertificateRequest[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([status])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([certificateTemplateId])
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  sortOrder   Int      @default(0)
+  lessons     Lesson[]
+
+  @@index([courseId])
+  @@index([sortOrder])
+}
+
+model Lesson {
+  id             String              @id @default(cuid())
+  moduleId       String
+  module         Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  videoType      String              @default("youtube") // youtube, HLS, etc.
+  videoUrl       String?
+  youtubeVideoId String?
+  duration       String
+  sortOrder      Int                 @default(0)
+  isPreview      Boolean             @default(false)
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  progress       LessonProgress[]
+  submissions    ProjectSubmission[]
+  resources      LessonResource[]
+
+  @@index([moduleId])
+  @@index([courseId])
+  @@index([sortOrder])
+}
+
+model Enrollment {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status         String    @default("active") // active, completed
+  progress       Int       @default(0) // progress percentage
+  createdAt      DateTime  @default(now()) // acts as enrollment date
+  completionDate DateTime?
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String
+  createdAt DateTime @default(now())
+}
+
+model LessonProgress {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+model StatItem {
+  id        String   @id @default(cuid())
+  value     String
+  label     String
+  icon      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Testimonial {
+  id         String   @id @default(cuid())
+  name       String
+  role       String
+  avatar     String
+  content    String
+  rating     Int      @default(5)
+  courseName String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model HomepageSetting {
+  key   String @id
+  value String
+}
+
+model UserSession {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken   String    @unique
+  createdAt      DateTime  @default(now())
+  lastActivityAt DateTime  @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  userAgent      String?
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+model ProjectSubmission {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId       String
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonId       String
+  lesson         Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  googleDriveUrl String?  @db.Text
+  fileName       String   @default("")
+  filePath       String   @default("")
+  fileSize       String   @default("")
+  fileData       String?  @db.Text
+  mimeType       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([lessonId])
+}
+
+model LessonResource {
+  id                String   @id @default(cuid())
+  lessonId          String
+  lesson            Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  fileName          String
+  filePath          String   @default("")
+  fileSize          String
+  fileData          String?  @db.Text
+  mimeType          String?
+  googleDriveFileId String?
+  fileType          String   @default("resource") // resource, note
+  storageType       String   @default("google_drive") // google_drive, local
+  status            String   @default("available") // available, processing, unavailable
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  @@index([lessonId])
+  @@index([googleDriveFileId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("info") // info, success, warning, course, submission, enrollment
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model LoginActivity {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email            String
+  userName         String?
+  role             String?
+  phone            String?
+  eventType        String   @default("LOGIN") // LOGIN, LOGOUT, REFRESH, REVOKE
+  status           String   // SUCCESS, FAILED, LOGGED_OUT, EXPIRED, BLOCKED, DEVICE_REMOVED
+  failureReason    String?
+  ipAddress        String?
+  ipVersion        String?  // IPv4, IPv6
+  locationApprox   String?
+  isp              String?
+  userAgent        String?  @db.Text
+  browserName      String?
+  browserVersion   String?
+  browserEngine    String?
+  operatingSystem  String?
+  osVersion        String?
+  deviceType       String?  // Desktop, Laptop, Mobile, Tablet
+  platform         String?
+  screenWidth      Int?
+  screenHeight     Int?
+  viewportWidth    Int?
+  viewportHeight   Int?
+  devicePixelRatio Float?
+  touchSupport     Boolean? @default(false)
+  sessionId        String?
+  deviceSessionId  String?
+  authMethod       String   @default("password")
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+  @@index([email])
+  @@index([status])
+  @@index([deviceType])
+  @@index([createdAt])
+  @@index([ipAddress])
+}
+
+model SecurityAuditLog {
+  id              String   @id @default(cuid())
+  adminId         String
+  adminName       String
+  action          String   // ADMIN_REMOVE_DEVICE, ADMIN_REVOKE_SESSION, ADMIN_BLOCK_USER, ADMIN_VIEW_DETAILS, ADMIN_SET_RETENTION
+  targetUserId    String?
+  targetUserName  String?
+  targetSessionId String?
+  ipAddress       String?
+  details         String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model GoogleOAuthAccount {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String
+  accessToken  String   @db.Text
+  refreshToken String?  @db.Text
+  expiryDate   BigInt?
+  scope        String?
+  folderId     String?  // Root "E-Learning Platform" folder ID in mentor's Drive
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model CertificateTemplate {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  orientation     String        @default("landscape") // landscape, portrait
+  width           Int           @default(1123) // Standard A4 landscape px
+  height          Int           @default(794)
+  backgroundImage String?       @db.Text
+  elements        String        @db.Text // JSON string of CertificateElement array
+  isDefault       Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  courses         Course[]
+  certificates    Certificate[]
+
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model Certificate {
+  id                String              @id @default(cuid())
+  certificateNumber String              @unique
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId          String
+  course            Course              @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  templateId        String?
+  template          CertificateTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateSnapshot  String?             @db.Text // JSON snapshot of template elements & background at time of issuance
+  issueDate         DateTime            @default(now())
+  completionDate    DateTime?
+  status            String              @default("issued") // issued, reissued, revoked
+  generatedBy       String              @default("System") // Admin, System
+  metadata          String?             @db.Text // JSON metadata
+  pdfUrl            String?             @db.Text
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  history           CertificateHistory[]
+  certificateRequest CertificateRequest?
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([certificateNumber])
+  @@index([status])
+  @@index([templateId])
+}
+
+model CertificateHistory {
+  id            String      @id @default(cuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  action        String      // issued, reissued, revoked, metadata_updated
+  performedBy   String      // Admin, System, or user identifier
+  details       String?     @db.Text
+  createdAt     DateTime    @default(now())
+
+  @@index([certificateId])
+}
+
+model CertificateRequest {
+  id              String       @id @default(cuid())
+  studentId       String
+  student         User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId        String
+  course          Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  mentorId        String?
+  mentor          Mentor?      @relation(fields: [mentorId], references: [id], onDelete: SetNull)
+  status          String       @default("pending") // pending, granted, rejected
+  requestedAt     DateTime     @default(now())
+  reviewedAt      DateTime?
+  grantedAt       DateTime?
+  rejectionReason String?      @db.Text
+  certificateId   String?      @unique
+  certificate     Certificate? @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([mentorId])
+  @@index([status])
+  @@index([certificateId])
+}
+
+model Enquiry {
+  id          String   @id @default(cuid())
+  type        String   @default("contact") // contact, hire, instructor, partner, corporate, collaboration, career
+  name        String
+  email       String
+  phone       String?
+  company     String?
+  role        String?
+  subject     String?
+  message     String   @db.Text
+  data        String?  @db.Text // JSON string for specialized custom form fields
+  status      String   @default("new") // new, in_review, contacted, closed
+  adminNotes  String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+}

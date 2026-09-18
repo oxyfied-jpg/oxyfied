@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /courses
+Allow: /resources
+Disallow: /dashboard/
+Disallow: /checkout/
+
+Sitemap: https://Oxyfied.com/sitemap.xml
