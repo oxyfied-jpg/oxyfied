@@ -27,7 +27,9 @@ const TOKEN_KEY = 'Oxyfied_token';
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
     try {
+      const token = localStorage.getItem(TOKEN_KEY);
       const cached = localStorage.getItem(USER_KEY);
+      if (!token) return null;
       return cached ? JSON.parse(cached) : null;
     } catch {
       return null;
@@ -46,8 +48,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem(USER_KEY, JSON.stringify(profile));
         } catch (err) {
           console.warn('Session expired or backend unreachable, clearing token.');
-          logout();
+          localStorage.removeItem(USER_KEY);
+          localStorage.removeItem(TOKEN_KEY);
+          setUser(null);
         }
+      } else {
+        localStorage.removeItem(USER_KEY);
+        setUser(null);
       }
       setIsLoading(false);
     };
